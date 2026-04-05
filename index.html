@@ -1,0 +1,1178 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<title>たまごハント in さいたま！</title>
+<style>
+/* === 基本スタイル === */
+* { margin: 0; padding: 0; box-sizing: border-box; }
+
+body {
+  font-family: 'Hiragino Kaku Gothic ProN', 'Yu Gothic', 'Meiryo', sans-serif;
+  overflow: hidden;
+  touch-action: manipulation;
+  -webkit-user-select: none;
+  user-select: none;
+  height: 100vh;
+  height: 100dvh;
+}
+
+/* === 背景：埼玉の風景 === */
+#game-container {
+  position: relative;
+  width: 100vw;
+  height: 100vh;
+  height: 100dvh;
+  overflow: hidden;
+  background: linear-gradient(180deg,
+    #5BAFE0 0%,
+    #8DD4F0 25%,
+    #A8E4A0 42%,
+    #7BC86C 42%,
+    #6AB85A 60%,
+    #5AA04C 80%,
+    #4A8A3C 100%
+  );
+}
+
+/* === 背景レイヤー === */
+#bg-far, #bg-mid, #bg-near, #bg-ground {
+  position: absolute;
+  left: 0; right: 0;
+  pointer-events: none;
+}
+
+/* 遠景：山と空 */
+#bg-far {
+  top: 15%;
+  height: 30%;
+}
+
+/* 中景：建物・ムーミンの家など */
+#bg-mid {
+  bottom: 30%;
+  height: 25%;
+}
+
+/* 近景：草原のオブジェクト */
+#bg-near {
+  bottom: 0;
+  height: 45%;
+}
+
+/* 地面の装飾 */
+#bg-ground {
+  bottom: 0;
+  height: 12%;
+}
+
+/* 雲 */
+.cloud {
+  position: absolute;
+  border-radius: 50%;
+  background: rgba(255,255,255,0.9);
+  box-shadow: 0 0 20px 10px rgba(255,255,255,0.4);
+  animation: float-cloud linear infinite;
+}
+
+@keyframes float-cloud {
+  from { transform: translateX(-200px); }
+  to { transform: translateX(calc(100vw + 200px)); }
+}
+
+/* 背景のデコ要素 */
+.bg-deco {
+  position: absolute;
+  pointer-events: none;
+  filter: drop-shadow(1px 2px 2px rgba(0,0,0,0.15));
+}
+
+/* 背景アニメーション */
+.bg-sway {
+  animation: bg-sway 4s ease-in-out infinite;
+}
+@keyframes bg-sway {
+  0%, 100% { transform: rotate(-2deg); }
+  50% { transform: rotate(2deg); }
+}
+
+.bg-bob {
+  animation: bg-bob 3s ease-in-out infinite;
+}
+@keyframes bg-bob {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-6px); }
+}
+
+.bg-float {
+  animation: bg-float 5s ease-in-out infinite;
+}
+@keyframes bg-float {
+  0%, 100% { transform: translateY(0) rotate(0deg); }
+  50% { transform: translateY(-8px) rotate(3deg); }
+}
+
+/* 桜の花びら */
+.petal {
+  position: absolute;
+  width: 10px;
+  height: 10px;
+  background: radial-gradient(circle, #FFB7C5, #FF92A5);
+  border-radius: 50% 0 50% 50%;
+  opacity: 0.7;
+  animation: petal-fall linear infinite;
+  pointer-events: none;
+  z-index: 10;
+}
+
+@keyframes petal-fall {
+  0% { transform: translateY(-20px) rotate(0deg); opacity: 0.8; }
+  100% { transform: translateY(100vh) rotate(720deg); opacity: 0; }
+}
+
+/* === UI ヘッダー === */
+#header {
+  position: absolute;
+  top: 0; left: 0; right: 0;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 10px 14px;
+  background: linear-gradient(180deg, rgba(255,255,255,0.92) 0%, rgba(255,255,255,0.8) 100%);
+  backdrop-filter: blur(8px);
+  z-index: 100;
+  border-bottom: 3px solid #FFD700;
+  box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+}
+
+#score-display {
+  font-size: 20px;
+  font-weight: bold;
+  color: #E8550F;
+  text-shadow: 1px 1px 0 rgba(255,255,255,0.8);
+}
+
+#timer-display {
+  font-size: 24px;
+  font-weight: bold;
+  color: #2E7D32;
+  min-width: 70px;
+  text-align: center;
+  padding: 2px 12px;
+  background: rgba(46,125,50,0.1);
+  border-radius: 20px;
+  transition: all 0.3s;
+}
+
+#timer-display.urgent {
+  color: #D32F2F;
+  background: rgba(211,47,47,0.1);
+  animation: pulse-timer 0.5s ease-in-out infinite alternate;
+}
+
+@keyframes pulse-timer {
+  from { transform: scale(1); }
+  to { transform: scale(1.08); }
+}
+
+#egg-count {
+  font-size: 18px;
+  color: #6A4C93;
+  font-weight: bold;
+}
+
+/* === たまご === */
+.egg {
+  position: absolute;
+  cursor: pointer;
+  z-index: 50;
+  transition: transform 0.1s;
+  animation: egg-appear 0.4s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
+  filter: drop-shadow(2px 4px 4px rgba(0,0,0,0.25));
+}
+
+.egg:active {
+  transform: scale(0.85);
+}
+
+.egg.golden {
+  animation: egg-appear 0.4s cubic-bezier(0.34, 1.56, 0.64, 1) forwards,
+             golden-glow 0.8s ease-in-out infinite alternate;
+}
+
+@keyframes egg-appear {
+  0% { transform: scale(0) rotate(-20deg); opacity: 0; }
+  100% { transform: scale(1) rotate(0deg); opacity: 1; }
+}
+
+@keyframes egg-collect {
+  0% { transform: scale(1); opacity: 1; }
+  40% { transform: scale(1.4) rotate(10deg); opacity: 0.9; }
+  100% { transform: scale(0) rotate(30deg) translateY(-30px); opacity: 0; }
+}
+
+@keyframes golden-glow {
+  from { filter: drop-shadow(2px 4px 4px rgba(0,0,0,0.25)) drop-shadow(0 0 8px rgba(255,215,0,0.4)); }
+  to { filter: drop-shadow(2px 4px 4px rgba(0,0,0,0.25)) drop-shadow(0 0 16px rgba(255,215,0,0.8)); }
+}
+
+/* 得点ポップアップ */
+.score-pop {
+  position: absolute;
+  font-size: 28px;
+  font-weight: bold;
+  color: #FF6B00;
+  z-index: 200;
+  pointer-events: none;
+  animation: pop-up 0.9s ease-out forwards;
+  text-shadow: 2px 2px 0 white, -1px -1px 0 white, 1px -1px 0 white, -1px 1px 0 white;
+}
+
+.score-pop.golden {
+  font-size: 38px;
+  color: #FFD700;
+  text-shadow: 2px 2px 0 #B8860B, -1px -1px 0 #B8860B, 0 0 10px rgba(255,215,0,0.5);
+}
+
+@keyframes pop-up {
+  0% { transform: translateY(0) scale(0.5); opacity: 0; }
+  25% { transform: translateY(-15px) scale(1.3); opacity: 1; }
+  100% { transform: translateY(-90px) scale(0.9); opacity: 0; }
+}
+
+/* === スタート・終了画面 === */
+#overlay {
+  position: absolute;
+  top: 0; left: 0; right: 0; bottom: 0;
+  background: rgba(0,0,0,0.45);
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  z-index: 500;
+  backdrop-filter: blur(3px);
+}
+
+#overlay.hidden { display: none; }
+
+.panel {
+  background: linear-gradient(180deg, #FFFFFF 0%, #FFF8E7 100%);
+  border-radius: 28px;
+  padding: 28px 24px;
+  text-align: center;
+  max-width: 380px;
+  width: 88%;
+  box-shadow: 0 10px 40px rgba(0,0,0,0.25), inset 0 1px 0 rgba(255,255,255,0.8);
+  border: 4px solid #FFD700;
+  position: relative;
+  overflow: hidden;
+}
+
+.panel::before {
+  content: '';
+  position: absolute;
+  top: -2px; left: -2px; right: -2px;
+  height: 6px;
+  background: linear-gradient(90deg, #FF6B6B, #FFD93D, #4ECDC4, #C3AED6, #FF8B94);
+  border-radius: 28px 28px 0 0;
+}
+
+.panel h1 {
+  font-size: 30px;
+  color: #E8550F;
+  margin-bottom: 4px;
+  text-shadow: 1px 1px 0 rgba(255,200,100,0.4);
+}
+
+.panel h2 {
+  font-size: 22px;
+  color: #555;
+  margin-bottom: 10px;
+}
+
+.panel p {
+  font-size: 16px;
+  color: #666;
+  margin-bottom: 6px;
+  line-height: 1.7;
+}
+
+.panel .emoji-big {
+  font-size: 52px;
+  display: block;
+  margin: 6px 0;
+}
+
+/* 埼玉名物アイコン列 */
+.saitama-icons {
+  display: flex;
+  justify-content: center;
+  gap: 8px;
+  margin: 8px 0;
+  font-size: 24px;
+  opacity: 0.7;
+}
+
+.btn {
+  display: inline-block;
+  padding: 16px 44px;
+  font-size: 22px;
+  font-weight: bold;
+  border: none;
+  border-radius: 50px;
+  cursor: pointer;
+  margin-top: 14px;
+  transition: transform 0.15s, box-shadow 0.15s;
+  -webkit-tap-highlight-color: transparent;
+  letter-spacing: 2px;
+  position: relative;
+  overflow: hidden;
+}
+
+.btn::after {
+  content: '';
+  position: absolute;
+  top: 0; left: -100%;
+  width: 100%; height: 100%;
+  background: linear-gradient(90deg, transparent, rgba(255,255,255,0.3), transparent);
+  animation: btn-shine 2.5s ease-in-out infinite;
+}
+
+@keyframes btn-shine {
+  0% { left: -100%; }
+  50%, 100% { left: 100%; }
+}
+
+.btn:active { transform: scale(0.94); }
+
+.btn-start {
+  background: linear-gradient(135deg, #FF6B35, #FF8C42);
+  color: white;
+  box-shadow: 0 6px 20px rgba(255,107,53,0.4), 0 2px 4px rgba(0,0,0,0.1);
+}
+
+.btn-restart {
+  background: linear-gradient(135deg, #4CAF50, #66BB6A);
+  color: white;
+  box-shadow: 0 6px 20px rgba(76,175,80,0.4), 0 2px 4px rgba(0,0,0,0.1);
+}
+
+/* 結果画面 */
+#result-score {
+  font-size: 52px;
+  font-weight: bold;
+  color: #E8550F;
+  margin: 6px 0;
+  text-shadow: 2px 2px 0 rgba(255,200,100,0.3);
+}
+
+#result-message {
+  font-size: 19px;
+  color: #6A4C93;
+  font-weight: bold;
+  margin: 8px 0;
+  line-height: 1.5;
+}
+
+#result-detail {
+  font-size: 15px;
+  color: #888;
+  line-height: 1.6;
+}
+
+/* ラッシュ演出 */
+#rush-banner {
+  position: absolute;
+  top: 55px;
+  left: 0; right: 0;
+  text-align: center;
+  font-size: 22px;
+  font-weight: bold;
+  color: #D32F2F;
+  z-index: 90;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.5s;
+  text-shadow: 1px 1px 0 white, -1px -1px 0 white;
+  animation: none;
+}
+
+#rush-banner.show {
+  opacity: 1;
+  animation: rush-pulse 0.6s ease-in-out 3;
+}
+
+@keyframes rush-pulse {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.15); }
+}
+
+/* === レスポンシブ対応 === */
+@media (max-width: 480px) {
+  #header { padding: 8px 10px; }
+  #score-display { font-size: 17px; }
+  #timer-display { font-size: 20px; }
+  #egg-count { font-size: 15px; }
+  .panel { padding: 22px 18px; }
+  .panel h1 { font-size: 26px; }
+  .btn { padding: 14px 36px; font-size: 20px; }
+  #rush-banner { font-size: 18px; }
+}
+
+@media (min-width: 768px) {
+  .egg svg { width: 65px; height: auto; }
+}
+</style>
+</head>
+<body>
+
+<!--
+  たまごハント in さいたま！
+  ─────────────────────────────
+  あそびかた：
+  画面に出てくる たまごを タップ（クリック）して 集めよう！
+  金色の たまごは とくべつ！ たくさんポイントが もらえるよ！（3回 出てくるよ）
+  30秒で 何こ 集められるかな？
+  のこり20秒から たまごが いっぱい出てくるよ！
+
+  保護者の方へ：
+  このゲームは埼玉県をテーマにしたイースターエッグハントゲームです。
+  制限時間30秒で、画面に現れる卵をタップして集めます。
+  残り20秒からは複数の卵が同時に出現し、難易度が上がります。
+  お子さまが安全に楽しめるよう、外部通信や課金要素はありません。
+-->
+
+<div id="game-container">
+  <!-- 背景レイヤー -->
+  <div id="bg-far"></div>
+  <div id="bg-mid"></div>
+  <div id="bg-near"></div>
+  <div id="bg-ground"></div>
+
+  <!-- ヘッダー（スコア・タイマー） -->
+  <div id="header">
+    <div id="score-display">0 点</div>
+    <div id="timer-display">30</div>
+    <div id="egg-count">0 こ</div>
+  </div>
+
+  <!-- ラッシュ演出 -->
+  <div id="rush-banner">たまごラッシュ！！</div>
+
+  <!-- オーバーレイ（スタート・結果画面） -->
+  <div id="overlay">
+    <!-- スタート画面 -->
+    <div id="start-panel" class="panel">
+      <span class="emoji-big">🥚🐣🌸</span>
+      <h1>たまごハント</h1>
+      <h2>in さいたま！</h2>
+      <p>さいたまの 原っぱで<br>たまごを 集めよう！</p>
+      <div class="saitama-icons">
+        <span title="ムーミン">🏠</span>
+        <span title="おせんべい">🍘</span>
+        <span title="ひな人形">🎎</span>
+        <span title="さくら">🌸</span>
+        <span title="さつまいも">🍠</span>
+      </div>
+      <p style="font-size:13px; color:#999;">タップで たまごを ゲット！<br>金色のたまごは ボーナス！（3回出るよ）<br>のこり20秒から ラッシュタイム！</p>
+      <button class="btn btn-start" id="btn-start" ontouchstart="">スタート！</button>
+    </div>
+
+    <!-- 結果画面 -->
+    <div id="result-panel" class="panel" style="display:none;">
+      <span class="emoji-big" id="result-emoji">🎉</span>
+      <h2>おわり！</h2>
+      <div id="result-score">0</div>
+      <div id="result-message"></div>
+      <div id="result-detail"></div>
+      <button class="btn btn-restart" id="btn-restart" ontouchstart="">もう一回！</button>
+    </div>
+  </div>
+</div>
+
+<script>
+// === ゲーム設定 ===
+const CONFIG = {
+  GAME_DURATION: 30,           // ゲーム時間（秒）
+  RUSH_START: 20,              // ラッシュ開始（のこり秒）
+  EGG_INTERVAL_MIN: 700,      // 卵出現の最短間隔（ミリ秒）
+  EGG_INTERVAL_MAX: 1300,     // 卵出現の最長間隔（ミリ秒）
+  RUSH_INTERVAL_MIN: 300,     // ラッシュ時の最短間隔
+  RUSH_INTERVAL_MAX: 700,     // ラッシュ時の最長間隔
+  RUSH_SPAWN_MIN: 2,          // ラッシュ時の最小同時出現数
+  RUSH_SPAWN_MAX: 3,          // ラッシュ時の最大同時出現数
+  EGG_LIFETIME: 2200,         // 卵が消えるまでの時間（ミリ秒）
+  MAX_EGGS_ON_SCREEN: 5,      // 同時に表示される卵の最大数
+  NORMAL_POINTS: 10,          // 通常の卵のポイント
+  GOLDEN_POINTS: 50,          // 黄金の卵のポイント
+  EGG_SIZE: 55,               // 卵のサイズ（px）
+};
+
+// === たまごの色パターン ===
+const EGG_COLORS = [
+  { base: '#FF6B6B', stripe: '#FF8E8E', dot: '#FFD93D', accent: '#E84040' },
+  { base: '#4ECDC4', stripe: '#6EE7DE', dot: '#FF6B6B', accent: '#33A89E' },
+  { base: '#A8E6CF', stripe: '#C4F0DB', dot: '#FF8B94', accent: '#7CD4AD' },
+  { base: '#FFD93D', stripe: '#FFE566', dot: '#FF6B6B', accent: '#E8C020' },
+  { base: '#C3AED6', stripe: '#D4C2E4', dot: '#FFD93D', accent: '#A88FC0' },
+  { base: '#FF8B94', stripe: '#FFA8AF', dot: '#4ECDC4', accent: '#E06A74' },
+  { base: '#74B9FF', stripe: '#93CAFF', dot: '#FFD93D', accent: '#4A9AE8' },
+  { base: '#FFA07A', stripe: '#FFB89E', dot: '#87CEEB', accent: '#E08060' },
+];
+
+// 模様パターン（卵ごとにランダムに選ばれる）
+const PATTERNS = ['stripes', 'dots', 'zigzag', 'stars', 'hearts'];
+
+// 通常の卵SVG生成
+function createEggSVG(colors) {
+  const pattern = PATTERNS[Math.floor(Math.random() * PATTERNS.length)];
+  let decoration = '';
+
+  switch(pattern) {
+    case 'stripes':
+      decoration = `
+        <path d="M9,32 Q30,24 51,32" stroke="${colors.stripe}" stroke-width="5" fill="none" opacity="0.7"/>
+        <path d="M11,44 Q30,38 49,44" stroke="${colors.stripe}" stroke-width="4" fill="none" opacity="0.6"/>
+        <path d="M14,55 Q30,50 46,55" stroke="${colors.stripe}" stroke-width="3" fill="none" opacity="0.5"/>`;
+      break;
+    case 'dots':
+      decoration = `
+        <circle cx="18" cy="34" r="4" fill="${colors.dot}" opacity="0.8"/>
+        <circle cx="42" cy="34" r="4" fill="${colors.dot}" opacity="0.8"/>
+        <circle cx="30" cy="46" r="4" fill="${colors.dot}" opacity="0.8"/>
+        <circle cx="20" cy="52" r="3" fill="${colors.dot}" opacity="0.6"/>
+        <circle cx="40" cy="52" r="3" fill="${colors.dot}" opacity="0.6"/>
+        <circle cx="30" cy="28" r="3" fill="${colors.dot}" opacity="0.6"/>`;
+      break;
+    case 'zigzag':
+      decoration = `
+        <polyline points="8,38 16,30 24,38 32,30 40,38 48,30 54,38" stroke="${colors.accent}" stroke-width="3" fill="none" opacity="0.6"/>
+        <polyline points="12,50 18,44 24,50 30,44 36,50 42,44 48,50" stroke="${colors.stripe}" stroke-width="2.5" fill="none" opacity="0.5"/>`;
+      break;
+    case 'stars':
+      decoration = `
+        <text x="14" y="36" font-size="10" fill="${colors.dot}" opacity="0.7">★</text>
+        <text x="36" y="36" font-size="10" fill="${colors.dot}" opacity="0.7">★</text>
+        <text x="24" y="50" font-size="12" fill="${colors.dot}" opacity="0.8">★</text>
+        <text x="18" y="56" font-size="7" fill="${colors.stripe}" opacity="0.5">☆</text>
+        <text x="38" y="56" font-size="7" fill="${colors.stripe}" opacity="0.5">☆</text>`;
+      break;
+    case 'hearts':
+      decoration = `
+        <text x="14" y="38" font-size="10" fill="${colors.dot}" opacity="0.7">♥</text>
+        <text x="38" y="38" font-size="10" fill="${colors.dot}" opacity="0.7">♥</text>
+        <text x="25" y="52" font-size="8" fill="${colors.stripe}" opacity="0.6">♥</text>`;
+      break;
+  }
+
+  return `<svg viewBox="0 0 60 76" width="${CONFIG.EGG_SIZE}" height="${Math.round(CONFIG.EGG_SIZE * 1.27)}">
+    <defs>
+      <radialGradient id="eg${Math.random().toString(36).slice(2,6)}" cx="38%" cy="32%">
+        <stop offset="0%" stop-color="${colors.stripe}"/>
+        <stop offset="70%" stop-color="${colors.base}"/>
+        <stop offset="100%" stop-color="${colors.accent}"/>
+      </radialGradient>
+    </defs>
+    <ellipse cx="30" cy="42" rx="26" ry="33" fill="${colors.base}" stroke="${colors.accent}" stroke-width="1" opacity="0.95"/>
+    <ellipse cx="30" cy="42" rx="24" ry="31" fill="${colors.base}" opacity="0.5"/>
+    ${decoration}
+    <ellipse cx="21" cy="27" rx="7" ry="9" fill="white" opacity="0.3"/>
+    <ellipse cx="24" cy="25" rx="3" ry="4" fill="white" opacity="0.2"/>
+  </svg>`;
+}
+
+// 黄金の卵SVG
+function createGoldenEggSVG() {
+  const s = Math.round(CONFIG.EGG_SIZE * 1.25);
+  const h = Math.round(s * 1.27);
+  return `<svg viewBox="0 0 60 76" width="${s}" height="${h}">
+    <defs>
+      <radialGradient id="gold-main" cx="38%" cy="30%">
+        <stop offset="0%" stop-color="#FFFDE0"/>
+        <stop offset="25%" stop-color="#FFE44D"/>
+        <stop offset="60%" stop-color="#FFD700"/>
+        <stop offset="100%" stop-color="#C8960C"/>
+      </radialGradient>
+      <radialGradient id="gold-shine" cx="30%" cy="25%">
+        <stop offset="0%" stop-color="white" stop-opacity="0.6"/>
+        <stop offset="100%" stop-color="white" stop-opacity="0"/>
+      </radialGradient>
+    </defs>
+    <ellipse cx="30" cy="42" rx="27" ry="34" fill="url(#gold-main)" stroke="#B8860B" stroke-width="2"/>
+    <ellipse cx="30" cy="42" rx="25" ry="32" fill="url(#gold-shine)"/>
+    <text x="12" y="33" font-size="11" opacity="0.9">✦</text>
+    <text x="40" y="45" font-size="9" opacity="0.8">✦</text>
+    <text x="20" y="58" font-size="8" opacity="0.7">✧</text>
+    <text x="38" y="28" font-size="8" opacity="0.7">✧</text>
+    <text x="28" y="35" font-size="10" opacity="0.6">✦</text>
+    <text x="18" y="20" font-size="15">👑</text>
+    <ellipse cx="20" cy="28" rx="6" ry="8" fill="white" opacity="0.4"/>
+    <ellipse cx="23" cy="26" rx="2.5" ry="3.5" fill="white" opacity="0.25"/>
+  </svg>`;
+}
+
+// === 効果音（Web Audio API） ===
+let audioCtx = null;
+
+function initAudio() {
+  if (!audioCtx) {
+    audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+  }
+  if (audioCtx.state === 'suspended') audioCtx.resume();
+}
+
+// 卵ゲット音
+function playCollectSound() {
+  if (!audioCtx) return;
+  const t = audioCtx.currentTime;
+  const osc = audioCtx.createOscillator();
+  const gain = audioCtx.createGain();
+  osc.connect(gain);
+  gain.connect(audioCtx.destination);
+  osc.type = 'sine';
+  osc.frequency.setValueAtTime(600, t);
+  osc.frequency.exponentialRampToValueAtTime(1000, t + 0.08);
+  osc.frequency.exponentialRampToValueAtTime(800, t + 0.15);
+  gain.gain.setValueAtTime(0.18, t);
+  gain.gain.exponentialRampToValueAtTime(0.001, t + 0.2);
+  osc.start(t);
+  osc.stop(t + 0.2);
+}
+
+// 黄金の卵ゲット音
+function playGoldenSound() {
+  if (!audioCtx) return;
+  const t = audioCtx.currentTime;
+  [523, 659, 784, 1047, 1318].forEach((freq, i) => {
+    const osc = audioCtx.createOscillator();
+    const gain = audioCtx.createGain();
+    osc.connect(gain);
+    gain.connect(audioCtx.destination);
+    osc.type = 'sine';
+    const start = t + i * 0.07;
+    osc.frequency.setValueAtTime(freq, start);
+    gain.gain.setValueAtTime(0.12, start);
+    gain.gain.exponentialRampToValueAtTime(0.001, start + 0.5);
+    osc.start(start);
+    osc.stop(start + 0.5);
+  });
+}
+
+// ゲーム終了音
+function playEndSound() {
+  if (!audioCtx) return;
+  const t = audioCtx.currentTime;
+  const osc = audioCtx.createOscillator();
+  const gain = audioCtx.createGain();
+  osc.connect(gain);
+  gain.connect(audioCtx.destination);
+  osc.type = 'triangle';
+  osc.frequency.setValueAtTime(500, t);
+  osc.frequency.exponentialRampToValueAtTime(200, t + 0.5);
+  gain.gain.setValueAtTime(0.2, t);
+  gain.gain.exponentialRampToValueAtTime(0.001, t + 0.6);
+  osc.start(t);
+  osc.stop(t + 0.6);
+}
+
+// ラッシュ開始音
+function playRushSound() {
+  if (!audioCtx) return;
+  const t = audioCtx.currentTime;
+  [440, 554, 659].forEach((freq, i) => {
+    const osc = audioCtx.createOscillator();
+    const gain = audioCtx.createGain();
+    osc.connect(gain);
+    gain.connect(audioCtx.destination);
+    osc.type = 'square';
+    const start = t + i * 0.1;
+    osc.frequency.setValueAtTime(freq, start);
+    gain.gain.setValueAtTime(0.08, start);
+    gain.gain.exponentialRampToValueAtTime(0.001, start + 0.2);
+    osc.start(start);
+    osc.stop(start + 0.2);
+  });
+}
+
+// === ゲーム状態 ===
+let gameState = {
+  score: 0,
+  eggsCollected: 0,
+  timeLeft: CONFIG.GAME_DURATION,
+  isRunning: false,
+  isRush: false,
+  rushTriggered: false,
+  goldenAppeared: 0,       // 黄金の卵の出現回数（最大3回）
+  goldenCollected: 0,      // 黄金の卵のゲット数
+  eggsOnScreen: 0,
+  timerInterval: null,
+  spawnTimeout: null,
+};
+
+// DOM参照
+const container = document.getElementById('game-container');
+const overlay = document.getElementById('overlay');
+const startPanel = document.getElementById('start-panel');
+const resultPanel = document.getElementById('result-panel');
+const scoreDisplay = document.getElementById('score-display');
+const timerDisplay = document.getElementById('timer-display');
+const eggCountDisplay = document.getElementById('egg-count');
+const rushBanner = document.getElementById('rush-banner');
+const btnStart = document.getElementById('btn-start');
+const btnRestart = document.getElementById('btn-restart');
+
+// ==================================================================
+// === 背景描画 ===
+// ==================================================================
+function createBackground() {
+  const bgFar = document.getElementById('bg-far');
+  const bgMid = document.getElementById('bg-mid');
+  const bgNear = document.getElementById('bg-near');
+  const bgGround = document.getElementById('bg-ground');
+
+  // ── 雲 ──
+  for (let i = 0; i < 5; i++) {
+    const c = document.createElement('div');
+    c.className = 'cloud';
+    const size = 50 + Math.random() * 70;
+    Object.assign(c.style, {
+      width: size + 'px',
+      height: size * 0.45 + 'px',
+      top: (3 + Math.random() * 22) + '%',
+      left: Math.random() * 80 + '%',
+      animationDelay: -Math.random() * 25 + 's',
+      animationDuration: 20 + Math.random() * 15 + 's',
+    });
+    container.insertBefore(c, container.firstChild);
+  }
+
+  // ── 桜の花びら ──
+  for (let i = 0; i < 12; i++) {
+    const p = document.createElement('div');
+    p.className = 'petal';
+    Object.assign(p.style, {
+      left: Math.random() * 100 + '%',
+      animationDuration: 6 + Math.random() * 6 + 's',
+      animationDelay: -Math.random() * 12 + 's',
+      width: 6 + Math.random() * 8 + 'px',
+      height: 6 + Math.random() * 8 + 'px',
+    });
+    container.insertBefore(p, container.firstChild);
+  }
+
+  // ── 遠景の山（秩父の山々をイメージ） ──
+  const mountainSVG = `
+    <svg viewBox="0 0 800 200" preserveAspectRatio="none" style="position:absolute;bottom:0;width:100%;height:100%;opacity:0.35;">
+      <polygon points="0,200 80,80 160,130 250,50 350,110 450,30 550,90 650,60 750,100 800,70 800,200" fill="#6B8E6B"/>
+      <polygon points="0,200 50,120 150,90 260,130 370,70 480,120 580,80 680,110 800,90 800,200" fill="#7CA07C" opacity="0.7"/>
+    </svg>`;
+  bgFar.innerHTML = mountainSVG;
+
+  // ── 中景の埼玉名物 ──
+
+  // ムーミンの家（飯能ムーミンバレーパーク風の青い塔の家）
+  const moomin = makeDeco('bg-mid', '8%', null, '0', null, 'bg-bob');
+  moomin.innerHTML = `<svg viewBox="0 0 80 120" width="60" height="90">
+    <rect x="20" y="40" width="40" height="60" rx="6" fill="#6BB5E0" stroke="#4A90B8" stroke-width="1.5"/>
+    <polygon points="10,45 40,10 70,45" fill="#C8554B" stroke="#A04038" stroke-width="1"/>
+    <rect x="25" y="80" width="14" height="20" rx="2" fill="#8B5E3C"/>
+    <rect x="28" y="52" width="8" height="8" rx="1" fill="#FFE066" opacity="0.9"/>
+    <rect x="44" y="52" width="8" height="8" rx="1" fill="#FFE066" opacity="0.9"/>
+    <rect x="44" y="68" width="8" height="8" rx="1" fill="#FFE066" opacity="0.9"/>
+    <circle cx="55" cy="30" r="6" fill="#D4D4D4" stroke="#BBB" stroke-width="0.5"/>
+    <rect x="53" y="10" width="4" height="20" fill="#AAA"/>
+  </svg>`;
+
+  // 草加せんべい
+  const senbei = makeDeco('bg-ground', '20%', null, '15%', null, 'bg-sway');
+  senbei.innerHTML = `<svg viewBox="0 0 60 60" width="42" height="42">
+    <circle cx="30" cy="30" r="26" fill="#D4A054" stroke="#B8863C" stroke-width="2"/>
+    <circle cx="30" cy="30" r="22" fill="#C89644" opacity="0.6"/>
+    <circle cx="30" cy="30" r="16" fill="none" stroke="#A07030" stroke-width="1" stroke-dasharray="4 3" opacity="0.5"/>
+    <text x="20" y="35" font-size="13" fill="#7A5020" opacity="0.7" font-weight="bold">草</text>
+  </svg>`;
+
+  // ひな人形（岩槻のひな人形）
+  const hina = makeDeco('bg-ground', null, null, '0', '18%', 'bg-bob');
+  hina.innerHTML = `<svg viewBox="0 0 90 70" width="70" height="55">
+    <!-- 男雛 -->
+    <circle cx="27" cy="22" r="10" fill="#FDDCB5"/>
+    <rect x="15" y="32" width="24" height="28" rx="5" fill="#2E4A8A"/>
+    <rect x="17" y="32" width="20" height="6" fill="#FFD700" opacity="0.6"/>
+    <polygon points="17,16 27,6 37,16" fill="#1A1A2E"/>
+    <circle cx="23" cy="21" r="1.5" fill="#333"/>
+    <circle cx="31" cy="21" r="1.5" fill="#333"/>
+    <path d="M24,26 Q27,29 30,26" stroke="#D46A6A" stroke-width="1" fill="none"/>
+    <!-- 女雛 -->
+    <circle cx="63" cy="22" r="10" fill="#FDDCB5"/>
+    <rect x="51" y="32" width="24" height="28" rx="5" fill="#CC3355"/>
+    <rect x="53" y="32" width="20" height="6" fill="#FFB7C5" opacity="0.6"/>
+    <polygon points="55,14 63,6 71,14" fill="#FFD700"/>
+    <circle cx="59" cy="21" r="1.5" fill="#333"/>
+    <circle cx="67" cy="21" r="1.5" fill="#333"/>
+    <path d="M60,26 Q63,29 66,26" stroke="#D46A6A" stroke-width="1" fill="none"/>
+    <!-- 台 -->
+    <rect x="5" y="60" width="80" height="8" rx="3" fill="#CC4444" opacity="0.5"/>
+  </svg>`;
+
+  // さつまいも（川越の名物）
+  const imo = makeDeco('bg-ground', '55%', null, '8%', null, 'bg-sway');
+  imo.style.animationDelay = '-1.5s';
+  imo.innerHTML = `<svg viewBox="0 0 60 35" width="45" height="26">
+    <ellipse cx="30" cy="18" rx="27" ry="14" fill="#8B3A62" stroke="#6A2848" stroke-width="1"/>
+    <ellipse cx="30" cy="18" rx="23" ry="11" fill="#9E4474" opacity="0.5"/>
+    <ellipse cx="22" cy="14" rx="5" ry="3" fill="#A8527E" opacity="0.6"/>
+    <path d="M50,10 Q58,4 56,12" stroke="#5A8C3A" stroke-width="2" fill="none"/>
+    <path d="M52,8 Q60,2 55,6" stroke="#6BA04A" stroke-width="1.5" fill="none"/>
+  </svg>`;
+
+  // 鯉のぼり（埼玉は加須の鯉のぼりが有名）
+  const koi = makeDeco('bg-mid', null, null, null, '5%', 'bg-float');
+  koi.style.top = '6%';
+  koi.innerHTML = `<svg viewBox="0 0 100 80" width="70" height="56">
+    <line x1="10" y1="0" x2="10" y2="80" stroke="#8B5E3C" stroke-width="2"/>
+    <!-- 赤い鯉 -->
+    <g transform="translate(12,10)">
+      <ellipse cx="30" cy="10" rx="28" ry="9" fill="#E04040"/>
+      <circle cx="12" cy="8" r="3" fill="white"/><circle cx="12" cy="8" r="1.5" fill="#333"/>
+      <path d="M56,4 L65,10 L56,16" fill="#C03030"/>
+      <path d="M28,3 Q35,10 28,17" stroke="#CC6060" stroke-width="1.5" fill="none" opacity="0.6"/>
+      <path d="M40,3 Q47,10 40,17" stroke="#CC6060" stroke-width="1.5" fill="none" opacity="0.6"/>
+    </g>
+    <!-- 青い鯉 -->
+    <g transform="translate(16,32)">
+      <ellipse cx="26" cy="9" rx="24" ry="8" fill="#4080CC"/>
+      <circle cx="10" cy="7" r="2.5" fill="white"/><circle cx="10" cy="7" r="1.2" fill="#333"/>
+      <path d="M48,3 L56,9 L48,15" fill="#3060AA"/>
+      <path d="M24,2 Q30,9 24,16" stroke="#6090DD" stroke-width="1.3" fill="none" opacity="0.6"/>
+      <path d="M34,2 Q40,9 34,16" stroke="#6090DD" stroke-width="1.3" fill="none" opacity="0.6"/>
+    </g>
+    <!-- 吹き流し -->
+    <g transform="translate(8,2)">
+      <circle cx="4" cy="3" r="4" fill="#FFD700"/>
+      <line x1="4" y1="7" x2="4" y2="10" stroke="#FF6B6B" stroke-width="1"/>
+      <line x1="6" y1="7" x2="8" y2="10" stroke="#4ECDC4" stroke-width="1"/>
+      <line x1="2" y1="7" x2="0" y2="10" stroke="#FFD93D" stroke-width="1"/>
+    </g>
+  </svg>`;
+
+  // 桜の木（大きめ）
+  const sakuraPositions = [
+    { left: '30%', scale: 1.1 },
+    { left: '65%', scale: 0.85 },
+    { left: '88%', scale: 0.95 },
+  ];
+  sakuraPositions.forEach(({ left, scale }) => {
+    const tree = makeDeco('bg-near', left, null, '28%', null);
+    tree.style.transform = `scale(${scale})`;
+    tree.innerHTML = `<svg viewBox="0 0 100 130" width="80" height="104">
+      <rect x="42" y="70" width="16" height="55" rx="3" fill="#8B6B4A" stroke="#6B4A30" stroke-width="1"/>
+      <rect x="38" y="110" width="24" height="8" rx="4" fill="#6B4A30" opacity="0.5"/>
+      <circle cx="50" cy="45" r="35" fill="#FFB7C5" opacity="0.85"/>
+      <circle cx="35" cy="55" r="22" fill="#FFC0CB" opacity="0.7"/>
+      <circle cx="65" cy="55" r="22" fill="#FFC0CB" opacity="0.7"/>
+      <circle cx="50" cy="30" r="20" fill="#FFD0D8" opacity="0.6"/>
+      <circle cx="38" cy="38" r="3" fill="white" opacity="0.5"/>
+      <circle cx="55" cy="32" r="2.5" fill="white" opacity="0.4"/>
+      <circle cx="60" cy="50" r="2" fill="white" opacity="0.4"/>
+    </svg>`;
+  });
+
+  // 地面に花を散りばめる
+  const groundFlowers = ['🌷', '🌼', '🌸', '💮', '🌺'];
+  for (let i = 0; i < 10; i++) {
+    const f = document.createElement('div');
+    f.className = 'bg-deco bg-sway';
+    f.style.position = 'absolute';
+    f.style.fontSize = (14 + Math.random() * 10) + 'px';
+    f.style.left = (3 + Math.random() * 94) + '%';
+    f.style.bottom = (1 + Math.random() * 8) + '%';
+    f.style.animationDelay = -Math.random() * 4 + 's';
+    f.textContent = groundFlowers[Math.floor(Math.random() * groundFlowers.length)];
+    bgGround.appendChild(f);
+  }
+
+  // 草のライン
+  const grassSVG = `
+    <svg viewBox="0 0 800 40" preserveAspectRatio="none" style="position:absolute;top:0;width:100%;height:30px;opacity:0.4;">
+      <path d="M0,40 Q20,10 40,40 Q60,15 80,40 Q100,8 120,40 Q140,12 160,40 Q180,5 200,40 Q220,15 240,40 Q260,8 280,40 Q300,12 320,40 Q340,5 360,40 Q380,15 400,40 Q420,8 440,40 Q460,12 480,40 Q500,5 520,40 Q540,15 560,40 Q580,8 600,40 Q620,12 640,40 Q660,5 680,40 Q700,15 720,40 Q740,8 760,40 Q780,12 800,40" fill="#4A8A3C"/>
+    </svg>`;
+  bgNear.insertAdjacentHTML('afterbegin', grassSVG);
+}
+
+// ヘルパー：デコ要素を配置
+function makeDeco(parentId, left, top, bottom, right, animClass) {
+  const el = document.createElement('div');
+  el.className = 'bg-deco' + (animClass ? ' ' + animClass : '');
+  el.style.position = 'absolute';
+  if (left) el.style.left = left;
+  if (top) el.style.top = top;
+  if (bottom) el.style.bottom = bottom;
+  if (right) el.style.right = right;
+  document.getElementById(parentId).appendChild(el);
+  return el;
+}
+
+// ==================================================================
+// === 卵の出現ロジック ===
+// ==================================================================
+
+function spawnEgg() {
+  if (!gameState.isRunning) return;
+
+  const elapsed = CONFIG.GAME_DURATION - gameState.timeLeft;
+  const isRushPhase = elapsed >= (CONFIG.GAME_DURATION - CONFIG.RUSH_START);
+
+  // ラッシュ演出（初回のみ）
+  if (isRushPhase && !gameState.rushTriggered) {
+    gameState.rushTriggered = true;
+    gameState.isRush = true;
+    playRushSound();
+    rushBanner.classList.add('show');
+    setTimeout(() => rushBanner.classList.remove('show'), 2500);
+  }
+
+  // ラッシュ時は複数同時に出現
+  const spawnCount = isRushPhase
+    ? Math.min(
+        CONFIG.RUSH_SPAWN_MIN + Math.floor(Math.random() * (CONFIG.RUSH_SPAWN_MAX - CONFIG.RUSH_SPAWN_MIN + 1)),
+        CONFIG.MAX_EGGS_ON_SCREEN - gameState.eggsOnScreen
+      )
+    : 1;
+
+  for (let i = 0; i < Math.max(spawnCount, 0); i++) {
+    spawnSingleEgg();
+  }
+
+  scheduleNextEgg();
+}
+
+function spawnSingleEgg() {
+  if (gameState.eggsOnScreen >= CONFIG.MAX_EGGS_ON_SCREEN) return;
+
+  // 黄金の卵判定（合計3回まで、10秒経過後〜残り3秒までランダムに出現）
+  let isGolden = false;
+  const elapsed = CONFIG.GAME_DURATION - gameState.timeLeft;
+  if (gameState.goldenAppeared < 3 &&
+      elapsed >= 10 &&
+      gameState.timeLeft >= 3 &&
+      Math.random() < 0.15) {
+    isGolden = true;
+    gameState.goldenAppeared++;
+  }
+
+  const egg = document.createElement('div');
+  egg.className = 'egg' + (isGolden ? ' golden' : '');
+
+  if (isGolden) {
+    egg.innerHTML = createGoldenEggSVG();
+    egg.dataset.golden = 'true';
+    egg.dataset.lifetime = '3200';
+  } else {
+    const colors = EGG_COLORS[Math.floor(Math.random() * EGG_COLORS.length)];
+    egg.innerHTML = createEggSVG(colors);
+    egg.dataset.golden = 'false';
+    egg.dataset.lifetime = String(CONFIG.EGG_LIFETIME);
+  }
+
+  // 位置決定（ヘッダーと端を避ける）
+  const margin = 15;
+  const headerH = 56;
+  const eggW = isGolden ? CONFIG.EGG_SIZE * 1.25 : CONFIG.EGG_SIZE;
+  const eggH = eggW * 1.27;
+  const maxX = window.innerWidth - eggW - margin;
+  const maxY = window.innerHeight - eggH - margin;
+  const x = margin + Math.random() * Math.max(maxX - margin, 0);
+  const y = headerH + 10 + Math.random() * Math.max(maxY - headerH - 10, 0);
+
+  egg.style.left = x + 'px';
+  egg.style.top = y + 'px';
+
+  // 出現にわずかなディレイを付けて自然に
+  egg.style.animationDelay = (Math.random() * 0.15) + 's';
+
+  egg.addEventListener('pointerdown', (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    collectEgg(egg);
+  });
+
+  container.appendChild(egg);
+  gameState.eggsOnScreen++;
+
+  // 自動消滅
+  const lifetime = parseInt(egg.dataset.lifetime);
+  egg._timeout = setTimeout(() => {
+    if (egg.parentNode) {
+      egg.style.transition = 'opacity 0.3s, transform 0.3s';
+      egg.style.opacity = '0';
+      egg.style.transform = 'scale(0.5)';
+      setTimeout(() => {
+        if (egg.parentNode) { egg.remove(); gameState.eggsOnScreen--; }
+      }, 300);
+    }
+  }, lifetime);
+}
+
+// 次のスポーンをスケジュール
+function scheduleNextEgg() {
+  if (!gameState.isRunning) return;
+
+  let min, max;
+  if (gameState.isRush) {
+    min = CONFIG.RUSH_INTERVAL_MIN;
+    max = CONFIG.RUSH_INTERVAL_MAX;
+  } else {
+    min = CONFIG.EGG_INTERVAL_MIN;
+    max = CONFIG.EGG_INTERVAL_MAX;
+  }
+
+  const delay = min + Math.random() * (max - min);
+  gameState.spawnTimeout = setTimeout(spawnEgg, delay);
+}
+
+// === 卵を集めた時の処理 ===
+function collectEgg(egg) {
+  if (!gameState.isRunning) return;
+  if (egg.dataset.collected === 'true') return;
+  egg.dataset.collected = 'true';
+
+  const isGolden = egg.dataset.golden === 'true';
+  const points = isGolden ? CONFIG.GOLDEN_POINTS : CONFIG.NORMAL_POINTS;
+
+  gameState.score += points;
+  gameState.eggsCollected++;
+  if (isGolden) gameState.goldenCollected++;
+
+  updateUI();
+
+  if (isGolden) { playGoldenSound(); } else { playCollectSound(); }
+
+  // 得点ポップアップ
+  const pop = document.createElement('div');
+  pop.className = 'score-pop' + (isGolden ? ' golden' : '');
+  pop.textContent = isGolden ? `+${points} ボーナス！` : `+${points}`;
+  pop.style.left = egg.style.left;
+  pop.style.top = egg.style.top;
+  container.appendChild(pop);
+  setTimeout(() => { if (pop.parentNode) pop.remove(); }, 900);
+
+  // 収集アニメーション
+  clearTimeout(egg._timeout);
+  egg.style.animation = 'egg-collect 0.35s ease-out forwards';
+  egg.style.pointerEvents = 'none';
+  setTimeout(() => {
+    if (egg.parentNode) { egg.remove(); gameState.eggsOnScreen--; }
+  }, 350);
+}
+
+// === UI更新 ===
+function updateUI() {
+  scoreDisplay.textContent = `${gameState.score} 点`;
+  timerDisplay.textContent = gameState.timeLeft;
+  eggCountDisplay.textContent = `${gameState.eggsCollected} こ`;
+
+  if (gameState.timeLeft <= 10) {
+    timerDisplay.classList.add('urgent');
+  } else {
+    timerDisplay.classList.remove('urgent');
+  }
+}
+
+// === ゲーム開始 ===
+function startGame() {
+  initAudio();
+
+  gameState.score = 0;
+  gameState.eggsCollected = 0;
+  gameState.timeLeft = CONFIG.GAME_DURATION;
+  gameState.isRunning = true;
+  gameState.isRush = false;
+  gameState.rushTriggered = false;
+  gameState.goldenAppeared = 0;
+  gameState.goldenCollected = 0;
+  gameState.eggsOnScreen = 0;
+
+  container.querySelectorAll('.egg, .score-pop').forEach(el => el.remove());
+  rushBanner.classList.remove('show');
+
+  updateUI();
+  overlay.classList.add('hidden');
+
+  gameState.timerInterval = setInterval(() => {
+    gameState.timeLeft--;
+    updateUI();
+    if (gameState.timeLeft <= 0) endGame();
+  }, 1000);
+
+  setTimeout(spawnEgg, 400);
+}
+
+// === ゲーム終了 ===
+function endGame() {
+  gameState.isRunning = false;
+  clearInterval(gameState.timerInterval);
+  clearTimeout(gameState.spawnTimeout);
+  playEndSound();
+
+  setTimeout(() => {
+    container.querySelectorAll('.egg').forEach(egg => {
+      clearTimeout(egg._timeout);
+      egg.style.transition = 'opacity 0.3s';
+      egg.style.opacity = '0';
+      setTimeout(() => { if (egg.parentNode) egg.remove(); }, 300);
+    });
+  }, 200);
+
+  setTimeout(showResult, 700);
+}
+
+// === 結果画面 ===
+function showResult() {
+  const score = gameState.score;
+  const count = gameState.eggsCollected;
+  const goldenGot = gameState.goldenCollected;
+
+  let message, emoji;
+  if (score >= 200) {
+    message = 'すごすぎる！たまごハントの 達人だ！';
+    emoji = '🏆🎊🌟';
+  } else if (score >= 120) {
+    message = 'とっても 上手！すばらしい！';
+    emoji = '🎉🌟✨';
+  } else if (score >= 60) {
+    message = 'よくできたね！がんばったね！';
+    emoji = '🎉😊👏';
+  } else {
+    message = '楽しかったね！もう一回 やってみよう！';
+    emoji = '😊🥚🌸';
+  }
+
+  document.getElementById('result-emoji').textContent = emoji;
+  document.getElementById('result-score').textContent = score + ' 点';
+  document.getElementById('result-message').textContent = message;
+
+  let detail = `たまご ${count}こ ゲット！`;
+  if (goldenGot > 0) detail += `\n✨ 金色のたまご ${goldenGot}こ 見つけたよ！ ✨`;
+  const detailEl = document.getElementById('result-detail');
+  detailEl.textContent = detail;
+  detailEl.style.whiteSpace = 'pre-line';
+
+  startPanel.style.display = 'none';
+  resultPanel.style.display = 'block';
+  overlay.classList.remove('hidden');
+}
+
+// === イベント ===
+btnStart.addEventListener('click', startGame);
+btnRestart.addEventListener('click', () => {
+  resultPanel.style.display = 'none';
+  startGame();
+});
+
+// === 初期化 ===
+createBackground();
+</script>
+</body>
+</html>
